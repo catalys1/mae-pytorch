@@ -20,6 +20,9 @@ cd mae-pytorch
 
 # Install required libraries (inside a virtual environment preferably)
 pip install -r requirements.txt
+
+# Set up .env for path to data
+echo "DATADIR=/path/to/data" > .env
 ```
 
 ## Usage
@@ -38,9 +41,14 @@ python train.py fit --config=configs/mae.yaml --config=configs/data/cub_mae.yaml
 
 ## Implementation
 
+The default model uses ViT-Base for the encoder, and a small ViT (`depth=4`, `width=192`) for the decoder. This is smaller than the model used in the paper.
+
+## Dependencies
+
 - Configuration and training is handled completely by [pytorch-lightning](https://pytorchlightning.ai).
 - The MAE model uses the VisionTransformer from [timm](https://github.com/rwightman/pytorch-image-models).
 - Interface to FGVC datasets through [fgvcdata](https://github.com/catalys1/fgvc-data-pytorch).
+- Configurable environment variables through [python-dotenv](https://pypi.org/project/python-dotenv/).
 
 ## Results
 
