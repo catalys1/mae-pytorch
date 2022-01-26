@@ -27,6 +27,8 @@ echo "DATADIR=/path/to/data" > .env
 
 ## Usage
 
+### MAE training
+
 Training options are provided through configuration files, handled by [LightningCLI](https://pytorch-lightning.readthedocs.io/en/stable/common/lightning_cli.html). See `configs/` for examples.
 
 Train an MAE model on the CUB dataset:
@@ -38,6 +40,10 @@ Using multiple GPUs:
 ```bash
 python train.py fit --config=configs/mae.yaml --config=configs/data/cub_mae.yaml --config=configs/multigpu.yaml
 ```
+
+### Fine-tuning
+
+Not yet implemented.
 
 ## Implementation
 
