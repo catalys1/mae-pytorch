@@ -1,0 +1,6 @@
+data:
+  class_path: datamodule.CubDataModule
+  init_args:
+    data_dir: ${oc.env:DATADIR}/CUB_200_2011/
+    batch_size: 40
+    num_samples: 400000
