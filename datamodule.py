@@ -2,7 +2,7 @@ from typing import Optional
 
 import fgvcdata
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10, CIFAR100
 from torchvision.transforms import transforms
 
@@ -27,7 +27,7 @@ class DataRepeater(object):
     def __init__(self, dataset, size=None):
         self.data = dataset
         self.size = size
-        if self.size == None:
+        if self.size is None:
             self.size = len(dataset)
     
     def __len__(self):
