@@ -33,4 +33,3 @@ model:
     enc_depth: 12
     dec_depth: 4
     lr: 0.00015
-    # train_steps: ${training_steps:${data.init_args.num_samples},${data.init_args.batch_size},${trainer.gpus}}
