@@ -64,3 +64,15 @@ python train.py fit --config=configs/mae.yaml --config=configs/data/cub_mae.yaml
 ```
 
 ![Bird Reconstructions](samples/bird-samples.png)
+
+
+### Hyperparameters
+
+| Param          | Setting      |
+| --             | --           |
+| GPUs           | 8x1080 Ti    |
+| Batch size     | 320 (40/GPU) |
+| Learning rate  | 1.5e-4       |
+| LR schedule    | Cosine decay |
+| Warmup         | 10% of steps |
+| Training steps | 78,100       |
