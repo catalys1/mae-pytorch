@@ -65,6 +65,12 @@ python train.py fit --config=configs/mae.yaml --config=configs/data/cub_mae.yaml
 
 ![Bird Reconstructions](samples/bird-samples.png)
 
+Image reconstructions of Cars validation set images after training with the following command:
+```bash
+python train.py fit --config=configs/mae.yaml --config=configs/data/cars_mae.yaml --config=configs/multigpu.yaml
+```
+
+![Cars Reconstructions](samples/car-samples.png)
 
 ### Hyperparameters
 
