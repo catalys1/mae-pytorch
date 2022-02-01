@@ -162,8 +162,7 @@ class MaskedAutoencoder(torch.nn.Module):
             (bs, n_tok) tensor of token indices, randomly permuted
         '''
         bidx = torch.arange(bs, device=device)[..., None] 
-        idx = torch.randperm(bs * n_tok, device=device)
-        idx = idx.remainder_(n_tok).view(bs, n_tok)
+        idx = torch.stack([torch.randperm(n_tok, device=device) for _ in range(bs)], 0)
         return bidx, idx
 
     def image_as_tokens(self, x: torch.Tensor):
