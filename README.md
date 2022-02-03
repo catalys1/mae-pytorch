@@ -7,7 +7,7 @@
 
 </div>
 
-A simple, unofficial implementation of MAE ([Masked Autoencoders are Scalable Vision Learners](https://arxiv.org/abs/2111.06377)) using  [pytorch-lightning](https://www.pytorchlightning.ai/).
+A simple, unofficial implementation of MAE ([Masked Autoencoders are Scalable Vision Learners](https://arxiv.org/abs/2111.06377)) using  [pytorch-lightning](https://www.pytorchlightning.ai/). A PyTorch implementation by the authors can be found [here](https://github.com/facebookresearch/mae).
 
 Currently implements training on [CUB](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) and [StanfordCars](http://ai.stanford.edu/~jkrause/cars/car_dataset.html), but is easily extensible to any other image dataset.
 
