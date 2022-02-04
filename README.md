@@ -11,6 +11,12 @@ A simple, unofficial implementation of MAE ([Masked Autoencoders are Scalable Vi
 
 Currently implements training on [CUB](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) and [StanfordCars](http://ai.stanford.edu/~jkrause/cars/car_dataset.html), but is easily extensible to any other image dataset.
 
+## Updates
+
+### February 4, 2022
+
+- Fixed a bug in the code for generating mask indices. Retrained and updated the reconstruction figures (see below). They aren't quite as pretty now, but they make more sense.
+
 ## Setup
 
 ```bash
