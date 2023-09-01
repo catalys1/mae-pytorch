@@ -13,6 +13,13 @@ Currently implements training on [CUB](http://www.vision.caltech.edu/visipedia/C
 
 ## Updates
 
+### September 1, 2023
+
+- Updated for compatibility with Pytorch 2.0 and PyTorch-Lightning 2.0. This probably breaks backwards compatibility. Created a release for the old version of the code.
+- Modified parts of the training code for better conciseness and efficiency.
+- Added additional features, including the option to save some validation reconstructions during training. **Note**: having trouble with saving reconstructions during distributed training; freezes at the end of the validation epoch.
+- Retrained CUB and Cars models with new code and a stronger decoder.
+
 ### February 4, 2022
 
 - Fixed a bug in the code for generating mask indices. Retrained and updated the reconstruction figures (see below). They aren't quite as pretty now, but they make more sense.
@@ -39,12 +46,12 @@ Training options are provided through configuration files, handled by [Lightning
 
 Train an MAE model on the CUB dataset:
 ```bash
-python train.py fit --config=configs/mae.yaml --config=configs/data/cub_mae.yaml
+python train.py fit -c configs/mae.yaml -c configs/data/cub_mae.yaml
 ```
 
 Using multiple GPUs:
 ```bash
-python train.py fit --config=configs/mae.yaml --config=configs/data/cub_mae.yaml --config=configs/multigpu.yaml
+python train.py fit -c configs/mae.yaml -c configs/data/cub_mae.yaml --trainer.devices 8
 ```
 
 ### Fine-tuning
@@ -53,7 +60,7 @@ Not yet implemented.
 
 ## Implementation
 
-The default model uses ViT-Base for the encoder, and a small ViT (`depth=4`, `width=192`) for the decoder. This is smaller than the model used in the paper.
+The default model uses ViT-Base for the encoder, and a small ViT (`depth=6`, `width=384`) for the decoder. This is smaller than the model used in the paper.
 
 ## Dependencies
 
@@ -66,15 +73,17 @@ The default model uses ViT-Base for the encoder, and a small ViT (`depth=4`, `wi
 
 Image reconstructions of CUB validation set images after training with the following command:
 ```bash
-python train.py fit --config=configs/mae.yaml --config=configs/data/cub_mae.yaml --config=configs/multigpu.yaml
+python train.py fit -c configs/mae.yaml -c configs/data/cub_mae.yaml --data.init_args.batch_size 256 --data.init_args.num_workers 12
 ```
 
 ![Bird Reconstructions](samples/bird-samples.png)
 
 Image reconstructions of Cars validation set images after training with the following command:
 ```bash
-python train.py fit --config=configs/mae.yaml --config=configs/data/cars_mae.yaml --config=configs/multigpu.yaml
+python train.py fit -c config/mae.yaml -c config/data/cars_mae.yaml --data.init_args.batch_size 256 --data.init_args.num_workers 16
 ```
+
+*Note: still waiting on updated results*.
 
 ![Cars Reconstructions](samples/car-samples.png)
 
@@ -82,9 +91,20 @@ python train.py fit --config=configs/mae.yaml --config=configs/data/cars_mae.yam
 
 | Param          | Setting      |
 | --             | --           |
-| GPUs           | 8x1080 Ti    |
-| Batch size     | 320 (40/GPU) |
+| GPUs           | 1xA100       |
+| Batch size     | 256          |
 | Learning rate  | 1.5e-4       |
 | LR schedule    | Cosine decay |
 | Warmup         | 10% of steps |
-| Training steps | 78,100       |
+| Training steps | 78,125       |
+
+
+### Training
+
+Training and validation loss curves for CUB.
+
+![CUB training curves](samples/bird-training-curves.png)
+
+Validation image reconstructions over the course of training.
+
+![CUB training progress](samples/birds-training.gif)
