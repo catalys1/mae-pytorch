@@ -1,3 +1,0 @@
-trainer:
-  gpus: 8
-  strategy: ddp
