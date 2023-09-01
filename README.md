@@ -83,8 +83,6 @@ Image reconstructions of Cars validation set images after training with the foll
 python train.py fit -c config/mae.yaml -c config/data/cars_mae.yaml --data.init_args.batch_size 256 --data.init_args.num_workers 16
 ```
 
-*Note: still waiting on updated results*.
-
 ![Cars Reconstructions](samples/car-samples.png)
 
 ### Hyperparameters
