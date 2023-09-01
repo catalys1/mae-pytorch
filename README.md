@@ -96,7 +96,7 @@ python train.py fit -c config/mae.yaml -c config/data/cars_mae.yaml --data.init_
 | Learning rate  | 1.5e-4       |
 | LR schedule    | Cosine decay |
 | Warmup         | 10% of steps |
-| Training steps | 78,125       |
+| Training steps | 78,000       |
 
 
 ### Training
