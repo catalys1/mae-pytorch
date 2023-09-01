@@ -1,9 +1,10 @@
 seed_everything: 123
 trainer:
-  gpus: 1
-  strategy: ddp
-  max_epochs: 100
-  limit_val_batches: 0.0
+  devices: 1
+  strategy: auto
+  max_epochs: 200
+  #limit_val_batches: 0.0
+  precision: 16-mixed
   callbacks:
     - class_path: pytorch_lightning.callbacks.ModelCheckpoint
       init_args:
@@ -29,7 +30,9 @@ model:
     patch_size: 16
     keep: 0.25
     enc_width: 768
-    dec_width: 0.25
+    dec_width: 0.5
     enc_depth: 12
-    dec_depth: 4
+    dec_depth: 6
     lr: 0.00015
+    save_imgs_every: 1
+    num_save_imgs: 36

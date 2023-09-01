@@ -2,5 +2,6 @@ data:
   class_path: datamodule.StanfordCarsDataModule
   init_args:
     data_dir: ${oc.env:DATADIR}/StanfordCars
-    batch_size: 40
-    num_samples: 400000
+    batch_size: 64
+    num_workers: 8
+    num_samples: 100000

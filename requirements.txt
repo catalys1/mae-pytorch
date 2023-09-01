@@ -1,9 +1,9 @@
-torch>=1.10.0
-torchvision>=0.11.0
-pytorch-lightning>=1.5.9
-jsonargparse[signatures]>=4.1.4
+torch>=2.0.0
+torchvision>=0.15.0
+pytorch-lightning>=2.0.2
+jsonargparse[signatures]>=4.21.1
 omegaconf>=2.1.1
 fgvcdata>=0.1.0
-timm>=0.4.12
+timm>=0.9.2
 python-dotenv>=0.17.3
-pillow>=8.1.0
+pillow>=9.4.0
