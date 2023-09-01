@@ -1,8 +1,12 @@
-from typing import Tuple, Union
+import math
+import os
+from typing import Any, Tuple, Union
 
 import pytorch_lightning as pl
 import timm
 import torch
+from torch import distributed
+import torchvision
 
 
 ##############################################################################
@@ -161,9 +165,15 @@ class MaskedAutoencoder(torch.nn.Module):
             (bs, 1) tensor of batch indices [0, 1, ..., bs - 1]^T
             (bs, n_tok) tensor of token indices, randomly permuted
         '''
-        bidx = torch.arange(bs, device=device)[..., None] 
-        idx = torch.stack([torch.randperm(n_tok, device=device) for _ in range(bs)], 0)
-        return bidx, idx
+        idx = torch.rand(bs, n_tok, device=device).argsort(dim=1)
+        return idx
+
+    @staticmethod
+    def select_tokens(x: torch.Tensor, idx: torch.Tensor):
+        '''Return the tokens from `x` corresponding to the indices in `idx`.
+        '''
+        idx = idx.unsqueeze(-1).expand(-1, -1, x.shape[-1])
+        return x.gather(dim=1, index=idx)
 
     def image_as_tokens(self, x: torch.Tensor):
         '''Reshape an image of shape (b, c, h, w) to a set of vectorized patches
@@ -193,7 +203,7 @@ class MaskedAutoencoder(torch.nn.Module):
         for visualization.
         '''
         x = self.image_as_tokens(x).clone()
-        bidx = torch.arange(x.shape[0], device=x.device)[:,None]
+        bidx = torch.arange(x.shape[0], device=x.device)[:, None]
         x[bidx, self.idx[:, int(self.keep * self.n):]] = 0
         return self.tokens_as_image(x)
 
@@ -209,10 +219,10 @@ class MaskedAutoencoder(torch.nn.Module):
         '''
         # create a new mask if self.freeze_mask is False, or if no mask has been created yet
         if not hasattr(self, 'idx') or not self.freeze_mask:
-            self.bidx, self.idx = self.generate_mask_index(x.shape[0], x.shape[1], x.device)
+            self.idx = self.generate_mask_index(x.shape[0], x.shape[1], x.device)
 
         k = int(self.keep * self.n)
-        x = x[self.bidx, self.idx[:, :k]]
+        x = self.select_tokens(x, self.idx[:, :k])
         return x
 
     def forward_features(self, x: torch.Tensor):
@@ -228,9 +238,10 @@ class MaskedAutoencoder(torch.nn.Module):
         x = self.project(x)
 
         k = self.n - x.shape[1]  # number of masked tokens
-        mask_toks = self.mask_token.repeat(x.shape[0], k, 1)
+        mask_toks = self.mask_token.expand(x.shape[0], k, -1)
         x = torch.cat([x, mask_toks], 1)
-        x = x[self.bidx, self.idx.argsort(1)] + self.pos_decoder
+        x = self.select_tokens(x, self.idx.argsort(1))
+        x = x + self.pos_decoder
         x = self.decoder(x)
         x = self.pixel_project(x)
 
@@ -249,7 +260,8 @@ class MAE(pl.LightningModule):
         enc_depth: depth of the encoder.
         dec_depth: depth of the decoder.
         lr: learning rate
-        train_steps: number of training steps.
+        save_imgs_every: save some reconstructions every nth epoch.
+        num_save_immgs: number of reconstructed images to save.
     '''
     def __init__(
         self,
@@ -257,11 +269,14 @@ class MAE(pl.LightningModule):
         patch_size: int = 16,
         keep: float = 0.25,
         enc_width: int = 768,
-        dec_width: float = 0.25,
+        dec_width: Union[int, float] = 0.5,
         enc_depth: int = 12,
-        dec_depth: int = 4,
+        dec_depth: int = 6,
         lr: float = 1.5e-4,
-        train_steps: int = 100000,
+        base_batch_size: int = 256,
+        normalize_for_loss: bool = False,
+        save_imgs_every: int = 1,
+        num_save_imgs: int = 36,
     ):
         super().__init__()
 
@@ -278,21 +293,79 @@ class MAE(pl.LightningModule):
         self.keep = keep
         self.n = self.mae.n
         self.lr = lr
-        self.train_steps = train_steps
+        self.base_batch_size = base_batch_size
+        self.normalize_for_loss = normalize_for_loss
+        self.save_imgs_every = save_imgs_every
+        self.num_save_imgs = num_save_imgs
 
-    def training_step(self, batch: Union[tuple, list]):
+        self.saved_imgs_list = []
+
+    def on_train_batch_end(self, *args, **kwargs):
+        if self.trainer.global_step == 2 and self.trainer.is_global_zero:
+            # print GPU memory usage once at beginning of training
+            avail, total = torch.cuda.mem_get_info()
+            mem_used = 100 * (1 - (avail / total))
+            gb = 1024**3
+            self.print(f'GPU memory used: {(total-avail)/gb:.2f} of {total/gb:.2f} GB ({mem_used:.2f}%)')
+        if self.trainer.num_nodes > 1 or self.trainer.num_devices > 1:
+            distributed.barrier()
+
+    def training_step(self, batch: Any, batch_idx: int, *args, **kwargs):
         x, _ = batch
         pred = self.mae(x)
         loss = self.masked_mse_loss(x, pred)
-        self.log('train_loss', loss)
+        self.log('train/loss', loss, prog_bar=True)
         return {'loss': loss}
 
+    def validation_step(self, batch: Any, batch_idx: int, *args, **kwargs):
+        x, _ = batch
+        pred = self.mae(x)
+        loss = self.masked_mse_loss(x, pred)
+        self.log('val/loss', loss, prog_bar=True, sync_dist=True)
+
+        if self.save_imgs_every:
+            p = int(self.save_imgs_every)
+            if self.trainer.current_epoch % p == 0:
+                nb = self.trainer.num_val_batches[0]
+                ns = self.num_save_imgs
+                per_batch = math.ceil(ns / nb)
+                self.saved_imgs_list.append(pred[:per_batch])
+
+        return {'loss': loss}
+
+    def on_validation_epoch_end(self):
+        if self.save_imgs_every:
+            if self.trainer.is_global_zero:
+                imgs = torch.cat(self.saved_imgs_list, 0)
+                self.saved_imgs_list.clear()
+                self.save_imgs(imgs[:self.num_save_imgs])
+            if self.trainer.num_nodes > 1 or self.trainer.num_devices > 1:
+                distributed.barrier()
+
+    # @pl.utilities.rank_zero_only
+    def save_imgs(self, imgs: torch.Tensor):
+        with torch.no_grad():
+            r = int(imgs.shape[0]**0.5)
+            imgs = self.mae.tokens_as_image(imgs.detach())
+            imgs = imgs.add_(1).mul_(127.5).clamp_(0, 255).byte()
+            imgs = torchvision.utils.make_grid(imgs, r).cpu()
+            epoch = self.trainer.current_epoch
+            dir = os.path.join(self.trainer.log_dir, 'imgs')
+            os.makedirs(dir, exist_ok=True)
+            torchvision.io.write_png(imgs, os.path.join(dir, f'epoch_{epoch}_imgs.png'))
+
     def configure_optimizers(self):
-        optim = torch.optim.AdamW(self.parameters(), lr=self.lr, betas=(.9, .95), weight_decay=0.05)
+        total_steps = self.trainer.estimated_stepping_batches
+        devices, nodes = self.trainer.num_devices, self.trainer.num_nodes
+        batch_size = self.trainer.train_dataloader.batch_size
+        lr_scale = devices * nodes * batch_size / self.base_batch_size
+        lr = self.lr * lr_scale
+
+        optim = torch.optim.AdamW(self.parameters(), lr=lr, betas=(.9, .95), weight_decay=0.05)
         schedule = torch.optim.lr_scheduler.OneCycleLR(
             optim,
-            max_lr=self.lr,
-            total_steps=self.train_steps,
+            max_lr=lr,
+            total_steps=total_steps,
             pct_start=0.1,
             cycle_momentum=False,
         )
@@ -304,9 +377,11 @@ class MAE(pl.LightningModule):
     def masked_mse_loss(self, img: torch.Tensor, recon: torch.Tensor):
         # turn the image into patch-vectors for comparison to model output
         x = self.mae.image_as_tokens(img)
-        bidx = torch.arange(x.shape[0], device=x.device)[:, None]  # B x 1
+        if self.normalize_for_loss:
+            std, mean = torch.std_mean(x, dim=-1, keepdim=True)
+            x = x.sub(mean).div(std + 1e-5)
         # only compute on the mask token outputs, which is everything after the first (n * keep)
         idx = self.mae.idx[:, int(self.keep * self.n):]
-        x = x[bidx, idx]
-        y = recon[bidx, idx]
+        x = self.mae.select_tokens(x, idx)
+        y = self.mae.select_tokens(recon, idx)
         return torch.nn.functional.mse_loss(x, y)
