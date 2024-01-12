@@ -1,7 +1,7 @@
 data:
   class_path: datamodule.STL10DataModule
   init_args:
-    data_dir: ${oc.env:DATADIR}/stl10_binary/
+    data_dir: ${oc.env:DATADIR}
     batch_size: 8
     num_workers: 0
     num_samples: 100000
