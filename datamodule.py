@@ -3,12 +3,13 @@ from typing import Optional
 import fgvcdata
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
-from torchvision.datasets import CIFAR10, CIFAR100
+from torchvision.datasets import CIFAR10, CIFAR100, STL10
 from torchvision.transforms import transforms
 
 
 __all__ = [
     'CubDataModule',
+    'STL10DataModule',
     'DogsDataModule',
     'StanfordCarsDataModule',
     'AircraftDataModule',
@@ -121,7 +122,6 @@ class CubDataModule(_FGVCDataModule):
     dataclass = fgvcdata.CUB
     num_class = 200
 
-
 class DogsDataModule(_FGVCDataModule):
     dataclass = fgvcdata.StanfordDogs
     num_class = 120
@@ -185,3 +185,42 @@ class Cifar10DataModule(_CifarDataModule):
 class Cifar100DataModule(_CifarDataModule):
     num_class = 100
     dataclass = CIFAR100
+
+
+class STL10DataModule(_BaseDataModule):
+    num_classes = 10
+    def prepare_data(self):
+        pass
+        #self.dataclass(self.data_dir, download=False)
+
+    def transforms(self, val=False):
+        if not val:
+            tform = transforms.Compose([
+                transforms.Resize(self.size),
+                transforms.Pad(self.size[0] // 8, padding_mode='reflect'),
+                transforms.RandomAffine((-10, 10), (0, 1/8), (1, 1.2)),
+                transforms.CenterCrop(self.size),
+                transforms.RandomHorizontalFlip(0.5),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713))
+            ])
+        else:
+            tform = transforms.Compose([
+                transforms.Resize(self.size),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713))
+            ])
+        return tform
+
+    def setup(self, stage=None):
+        self.data_train = STL10(
+            root = self.data_dir,
+            split = 'unlabeled', 
+            transform = self.transforms(not self.augment)
+        )
+        self.data_val = STL10(
+            root = self.data_dir,
+            split = 'train', 
+            transform = self.transforms(True)
+        )
+
