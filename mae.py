@@ -7,6 +7,7 @@ import timm
 import torch
 from torch import distributed
 import torchvision
+import torch.nn as nn
 
 
 ##############################################################################
@@ -385,3 +386,45 @@ class MAE(pl.LightningModule):
         x = self.mae.select_tokens(x, idx)
         y = self.mae.select_tokens(recon, idx)
         return torch.nn.functional.mse_loss(x, y)
+    
+class MAE_linear_probing(pl.LightningModule):
+    '''MAE encoder with linear readout to class labels
+    https://lightning.ai/docs/pytorch/stable/advanced/transfer_learning.html
+    '''
+    def __init__(self, ckpt_model):
+        super().__init__()
+        mae_module = MAE()
+        mae_module.load_state_dict(ckpt_model['state_dict'])
+        self.mae = mae_module.mae
+
+        self.feature_extractor = self.mae.encoder
+
+        self.classifier = torch.nn.Linear(self.mae.enc_width, 10)
+        self.classifier.weight.data.normal_(mean=0.0, std=0.01)
+        self.classifier.bias.data.zero_()
+
+    def forward(self, x):
+        x = self.mae.embed(x)
+        x = x + self.mae.pos_encoder
+        self.feature_extractor.eval()
+        with torch.no_grad():
+            x = self.feature_extractor(x)
+        x = self.classifier(x)
+        return x
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer
+
+    def training_step(self, batch: Any, batch_idx: int, *args, **kwargs):
+        x, labels = batch
+        pred = self.forward(x)
+        loss_fn = torch.nn.CrossEntropyLoss()
+        # Convert labels to one-hot
+        labels = torch.nn.functional.one_hot(labels, num_classes=10)
+        loss = loss_fn(pred, labels)
+
+        self.log('train/loss', loss, prog_bar=True)
+        return {'loss': loss}
+   
+    
