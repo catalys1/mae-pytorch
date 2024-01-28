@@ -388,14 +388,18 @@ class MAE(pl.LightningModule):
         y = self.mae.select_tokens(recon, idx)
         return torch.nn.functional.mse_loss(x, y)
     
-class MAE_linear_probing(pl.LightningModule):
-    '''MAE encoder with linear readout to class labels
+class MAE_linear_probe(pl.LightningModule):
+    '''Frozen MAE encoder with trainable linear readout to class labels
     https://lightning.ai/docs/pytorch/stable/advanced/transfer_learning.html
+
     '''
-    def __init__(self, ckpt_model):
+    def __init__(
+            self, 
+            ckpt_path: str,
+            ):
         super().__init__()
         mae_module = MAE()
-        mae_module.load_state_dict(ckpt_model['state_dict'])
+        mae_module.load_state_dict(torch.load(ckpt_path)['state_dict'])
         self.mae = mae_module.mae
 
         self.feature_extractor = self.mae.encoder
@@ -422,7 +426,6 @@ class MAE_linear_probing(pl.LightningModule):
         x, labels = batch
         pred = self.forward(x)
         loss = self.loss_fn(pred, labels)
-
         self.log('train/loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
         return {'loss': loss}
     
@@ -430,13 +433,19 @@ class MAE_linear_probing(pl.LightningModule):
         x, labels = batch
         pred = self.forward(x)
         loss = self.loss_fn(pred, labels)
-        #self.log('val/loss', loss, prog_bar=True, sync_dist=True)
         _, predicted = torch.max(pred, 1)
         correct = (predicted == labels).sum().item()
-        #return {'val_loss': loss, 'correct': correct, 'total': len(labels)}
         self.log('val/loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
-        self.log('val/total', len(labels), prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
         self.log('val/acc', correct / len(labels), prog_bar=True, on_step=False, sync_dist=True, on_epoch=True)
+
+    def test_step(self, batch: Any, batch_idx: int, *args, **kwargs):
+        x, labels = batch
+        pred = self.forward(x)
+        loss = self.loss_fn(pred, labels)
+        _, predicted = torch.max(pred, 1)
+        correct = (predicted == labels).sum().item()
+        self.log('test/loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('test/acc', correct / len(labels), prog_bar=True, on_step=False, sync_dist=True, on_epoch=True)
 
     def loss_fn(self, x, y):
         fn = torch.nn.CrossEntropyLoss()

@@ -1,0 +1,23 @@
+seed_everything: 123
+
+trainer:
+  devices: 1
+  strategy: auto
+  max_epochs: 100
+  precision: 16-mixed
+  callbacks:
+    - class_path: pytorch_lightning.callbacks.ModelCheckpoint
+      init_args:
+        filename: latest
+        every_n_epochs: 1
+        save_on_train_epoch_end: True
+    - class_path: pytorch_lightning.callbacks.lr_monitor.LearningRateMonitor
+      init_args:
+        logging_interval: step
+
+model:
+  class_path: mae.MAE_linear_probe
+  init_args:
+    ckpt_path: last.ckpt
+
+

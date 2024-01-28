@@ -1,5 +1,5 @@
 data:
-  class_path: datamodule.STL10PretrainDataModule
+  class_path: datamodule.STL10LinearProbeDataModule
   init_args:
     data_dir: ${oc.env:DATADIR}/STL10
     batch_size: 64
