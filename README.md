@@ -64,6 +64,8 @@ Now, append a linear probe to the last layer of the frozen encoder and discard t
 python linear_probe.py -c config/linear_probe.yaml -c config/data/stl10_linear_probe.yaml --model.init_args.ckpt_path <path to pretrained .ckpt>
 ``` 
 
+This yields 77.96\% accuracy on the test data.
+
 
 ### Fine-tuning
 
