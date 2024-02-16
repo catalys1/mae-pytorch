@@ -1,0 +1,7 @@
+data:
+  class_path: datamodule.STL10PretrainDataModule
+  init_args:
+    data_dir: ${oc.env:DATADIR}/STL10
+    batch_size: 64
+    num_workers: 8
+    num_samples: 100000

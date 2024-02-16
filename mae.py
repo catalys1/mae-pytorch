@@ -3,10 +3,12 @@ import os
 from typing import Any, Tuple, Union
 
 import pytorch_lightning as pl
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 import timm
 import torch
 from torch import distributed
 import torchvision
+import torch.nn as nn
 
 
 ##############################################################################
@@ -385,3 +387,67 @@ class MAE(pl.LightningModule):
         x = self.mae.select_tokens(x, idx)
         y = self.mae.select_tokens(recon, idx)
         return torch.nn.functional.mse_loss(x, y)
+    
+class MAE_linear_probe(pl.LightningModule):
+    '''Frozen MAE encoder with trainable linear readout to class labels
+    https://lightning.ai/docs/pytorch/stable/advanced/transfer_learning.html
+
+    '''
+    def __init__(
+            self, 
+            ckpt_path: str,
+            ):
+        super().__init__()
+        mae_module = MAE()
+        mae_module.load_state_dict(torch.load(ckpt_path)['state_dict'])
+        self.mae = mae_module.mae
+
+        self.feature_extractor = self.mae.encoder
+
+        self.classifier = torch.nn.Linear(self.mae.enc_width, 10)
+        self.classifier.weight.data.normal_(mean=0.0, std=0.01)
+        self.classifier.bias.data.zero_()
+
+    def forward(self, x):
+        x = self.mae.embed(x)
+        x = x + self.mae.pos_encoder
+        self.feature_extractor.eval()
+        with torch.no_grad():
+            x = self.feature_extractor(x)
+            x = x.mean(dim=1)  # average pool over the patch dimension
+        x = self.classifier(x)
+        return x
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=5e-4)
+        return optimizer
+
+    def training_step(self, batch: Any, batch_idx: int, *args, **kwargs):
+        x, labels = batch
+        pred = self.forward(x)
+        loss = self.loss_fn(pred, labels)
+        self.log('train/loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        return {'loss': loss}
+    
+    def validation_step(self, batch: Any, batch_idx: int, *args, **kwargs):
+        x, labels = batch
+        pred = self.forward(x)
+        loss = self.loss_fn(pred, labels)
+        _, predicted = torch.max(pred, 1)
+        correct = (predicted == labels).sum().item()
+        self.log('val/loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('val/acc', correct / len(labels), prog_bar=True, on_step=False, sync_dist=True, on_epoch=True)
+
+    def test_step(self, batch: Any, batch_idx: int, *args, **kwargs):
+        x, labels = batch
+        pred = self.forward(x)
+        loss = self.loss_fn(pred, labels)
+        _, predicted = torch.max(pred, 1)
+        correct = (predicted == labels).sum().item()
+        self.log('test/loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('test/acc', correct / len(labels), prog_bar=True, on_step=False, sync_dist=True, on_epoch=True)
+
+    def loss_fn(self, x, y):
+        fn = torch.nn.CrossEntropyLoss()
+        return fn(x, y)
+    

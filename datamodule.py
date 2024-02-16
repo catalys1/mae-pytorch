@@ -2,8 +2,8 @@ from typing import Optional
 
 import fgvcdata
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import DataLoader
-from torchvision.datasets import CIFAR10, CIFAR100
+from torch.utils.data import DataLoader, random_split
+from torchvision.datasets import CIFAR10, CIFAR100, STL10
 from torchvision.transforms import transforms
 
 
@@ -14,6 +14,7 @@ __all__ = [
     'AircraftDataModule',
     'Cifar10DataModule',
     'Cifar100DataModule',
+    'STL10DataModule'
 ]
 
 
@@ -121,7 +122,6 @@ class CubDataModule(_FGVCDataModule):
     dataclass = fgvcdata.CUB
     num_class = 200
 
-
 class DogsDataModule(_FGVCDataModule):
     dataclass = fgvcdata.StanfordDogs
     num_class = 120
@@ -185,3 +185,80 @@ class Cifar10DataModule(_CifarDataModule):
 class Cifar100DataModule(_CifarDataModule):
     num_class = 100
     dataclass = CIFAR100
+
+
+class STL10PretrainDataModule(_BaseDataModule):
+    num_classes = 10
+    def prepare_data(self):
+        pass
+
+    def transforms(self, val=False):
+        if not val:
+            tform = transforms.Compose([
+                transforms.Resize(self.size),
+                transforms.Pad(self.size[0] // 8, padding_mode='reflect'),
+                transforms.RandomAffine((-10, 10), (0, 1/8), (1, 1.2)),
+                transforms.CenterCrop(self.size),
+                transforms.RandomHorizontalFlip(0.5),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713))
+            ])
+        else:
+            tform = transforms.Compose([
+                transforms.Resize(self.size),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713))
+            ])
+        return tform
+
+    def setup(self, stage=None):
+        self.data_train = STL10(
+            root = self.data_dir,
+            split = 'unlabeled', 
+            transform = self.transforms(not self.augment)
+        )
+        self.data_val = STL10(
+            root = self.data_dir,
+            split = 'train', 
+            transform = self.transforms(True)
+        )
+
+class STL10LinearProbeDataModule(_BaseDataModule):
+    num_classes = 10
+    def prepare_data(self):
+        pass
+
+    def transforms(self):
+        tform = transforms.Compose([
+            transforms.Resize(self.size),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4467, 0.4398, 0.4066), (0.2603, 0.2566, 0.2713))
+        ])
+        return tform
+
+    def setup(self, stage=None):
+        self.data_train = STL10(
+            root = self.data_dir,
+            split = 'train', 
+            transform = self.transforms()
+        )
+        
+        data_val_test = STL10(
+            root = self.data_dir,
+            split = 'test', 
+            transform = self.transforms()
+        )
+        test_size = int(0.7 * len(data_val_test))
+        val_size = len(data_val_test) - test_size
+        self.data_val, self.data_test = random_split(data_val_test, [val_size, test_size])
+
+    def test_dataloader(self):
+        return DataLoader(
+            dataset = self.data_test,
+            batch_size = self.batch_size,
+            num_workers = self.num_workers,
+            pin_memory = self.pin_memory,
+            shuffle = False,
+            drop_last = True
+        )
+

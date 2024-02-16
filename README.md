@@ -9,7 +9,7 @@
 
 A simple, unofficial implementation of MAE ([Masked Autoencoders are Scalable Vision Learners](https://arxiv.org/abs/2111.06377)) using  [pytorch-lightning](https://www.pytorchlightning.ai/). A PyTorch implementation by the authors can be found [here](https://github.com/facebookresearch/mae).
 
-Currently implements training on [CUB](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) and [StanfordCars](http://ai.stanford.edu/~jkrause/cars/car_dataset.html), but is easily extensible to any other image dataset.
+Currently implements training on [CUB](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html), [StanfordCars](http://ai.stanford.edu/~jkrause/cars/car_dataset.html), [STL-10](https://cs.stanford.edu/~acoates/stl10/) but is easily extensible to any other image dataset.
 
 ## Updates
 
@@ -53,6 +53,19 @@ Using multiple GPUs:
 ```bash
 python train.py fit -c config/mae.yaml -c config/data/cub_mae.yaml --trainer.devices 8
 ```
+### Linear probing (currently only supported on STL-10)
+Evaluate the learned representations using a linear probe. First, pretrain the model on the 100.000 samples of the 'unlabeled' split.
+```bash
+python train.py fit -c config/mae.yaml -c config/data/stl10_mae.yaml
+```
+Now, append a linear probe to the last layer of the frozen encoder and discard the decoder. The appended classifier is then trained on 4000 labeled samples of the 'train' split (another 1000 are used for training validation) and evaluated on the 'test' split. To do so, simply provide the path to the pretrained model checkpoint in the command below.
+
+```bash
+python linear_probe.py -c config/linear_probe.yaml -c config/data/stl10_linear_probe.yaml --model.init_args.ckpt_path <path to pretrained .ckpt>
+``` 
+
+This yields 77.96\% accuracy on the test data.
+
 
 ### Fine-tuning
 
@@ -73,7 +86,7 @@ The default model uses ViT-Base for the encoder, and a small ViT (`depth=6`, `wi
 
 Image reconstructions of CUB validation set images after training with the following command:
 ```bash
-python train.py fit -c configs/mae.yaml -c configs/data/cub_mae.yaml --data.init_args.batch_size 256 --data.init_args.num_workers 12
+python train.py fit -c config/mae.yaml -c config/data/cub_mae.yaml --data.init_args.batch_size 256 --data.init_args.num_workers 12
 ```
 
 ![Bird Reconstructions](samples/bird-samples.png)
